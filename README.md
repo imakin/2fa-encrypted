@@ -1,6 +1,9 @@
 2fa based on https://github.com/rsc/2fa, but with encryption using aes-cbc and pbkdf2. there is also key timeout info
 
-encrypted 2fa file stored in $HOME/.2fa.encrypted, manually backup if needed
+
+![2fa-ok](https://user-images.githubusercontent.com/6647566/155826533-313e33b1-16a9-49c6-8e4d-9d6438dd6314.png)
+
+Encrypted 2fa file stored in $HOME/.2fa.encrypted, manually backup if needed
 
 _______
 original Readme:
