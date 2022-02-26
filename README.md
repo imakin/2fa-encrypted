@@ -1,3 +1,11 @@
+2fa based on https://github.com/rsc/2fa, but with encryption using aes-cbc and pbkdf2. there is also key timeout info
+
+encrypted 2fa file stored in $HOME/.2fa.encrypted, manually backup if needed
+
+_______
+original Readme:
+
+
 2fa is a two-factor authentication agent.
 
 Usage:

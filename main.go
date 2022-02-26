@@ -6,9 +6,9 @@
 //
 // Usage:
 //
-//	2fa -add [-7] [-8] [-hotp] name
-//	2fa -list
-//	2fa [-clip] name
+//  2fa -add [-7] [-8] [-hotp] name
+//  2fa -list
+//  2fa [-clip] name
 //
 // “2fa -add name” adds a new key to the 2fa keychain with the given name.
 // It prints a prompt to standard error and reads a two-factor key from standard input.
@@ -43,21 +43,21 @@
 //
 // Add it to 2fa under the name github, typing the secret at the prompt:
 //
-//	$ 2fa -add github
-//	2fa key for github: nzxxiidbebvwk6jb
-//	$
+//  $ 2fa -add github
+//  2fa key for github: nzxxiidbebvwk6jb
+//  $
 //
 // Then whenever GitHub prompts for a 2FA code, run 2fa to obtain one:
 //
-//	$ 2fa github
-//	268346
-//	$
+//  $ 2fa github
+//  268346
+//  $
 //
 // Or to type less:
 //
-//	$ 2fa
-//	268346	github
-//	$
+//  $ 2fa
+//  268346  github
+//  $
 //
 package main
 
@@ -70,9 +70,11 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	//~ "io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -101,12 +103,13 @@ func usage() {
 }
 
 func main() {
+	key_filename := filepath.Join(os.Getenv("HOME"), ".2fa.encrypted")
 	log.SetPrefix("2fa: ")
 	log.SetFlags(0)
 	flag.Usage = usage
 	flag.Parse()
-
-	k := readKeychain(filepath.Join(os.Getenv("HOME"), ".2fa"))
+	
+	k := readKeychain(key_filename)
 
 	if *flagList {
 		if flag.NArg() != 0 {
@@ -119,6 +122,7 @@ func main() {
 		if *flagClip {
 			usage()
 		}
+		timePrint()
 		k.showAll()
 		return
 	}
@@ -133,9 +137,10 @@ func main() {
 		if *flagClip {
 			usage()
 		}
-		k.add(name)
+		k.add(name,key_filename)
 		return
 	}
+	timePrint()
 	k.show(name)
 }
 
@@ -143,6 +148,7 @@ type Keychain struct {
 	file string
 	data []byte
 	keys map[string]Key
+	keystring string
 }
 
 type Key struct {
@@ -155,10 +161,12 @@ const counterLen = 20
 
 func readKeychain(file string) *Keychain {
 	c := &Keychain{
-		file: file,
 		keys: make(map[string]Key),
 	}
-	data, err := ioutil.ReadFile(file)
+	log.Println("using file ",file)
+	keystring := loadKey(file)
+	c.keystring = keystring
+	data, err := ioutil.ReadAll(strings.NewReader(keystring))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return c
@@ -201,7 +209,7 @@ func readKeychain(file string) *Keychain {
 				}
 			}
 		}
-		log.Printf("%s:%d: malformed key", c.file, lineno)
+		log.Printf("%s:%d: malformed key", file, lineno)
 	}
 	return c
 }
@@ -224,7 +232,7 @@ func noSpace(r rune) rune {
 	return r
 }
 
-func (c *Keychain) add(name string) {
+func (c *Keychain) add(name string, key_filename string) {
 	size := 6
 	if *flag7 {
 		size = 7
@@ -251,14 +259,31 @@ func (c *Keychain) add(name string) {
 		line += " " + strings.Repeat("0", 20)
 	}
 	line += "\n"
+	if c.keystring!="" {
+		log.Printf("loaded from c.keystring",c.keystring)
+		line += c.keystring
+	} else {
+		log.Printf("brandnew key")
+	}
 
-	f, err := os.OpenFile(c.file, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
+
+	
+	//now encrypt
+	var cmdout bytes.Buffer
+	cmd := exec.Command("openssl","enc","-aes-256-cbc","-pbkdf2","-e")
+	cmd.Stdin = strings.NewReader(line)
+	cmd.Stdout = &cmdout
+	cmderr := cmd.Run()
+	if cmderr != nil {
+		log.Fatal(cmderr)
+	}
+	
+	f, err := os.OpenFile(key_filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Fatalf("opening keychain: %v", err)
 	}
 	f.Chmod(0600)
-
-	if _, err := f.Write([]byte(line)); err != nil {
+	if _, err := f.Write(cmdout.Bytes()); err != nil {
 		log.Fatalf("adding key: %v", err)
 	}
 	if err := f.Close(); err != nil {
@@ -342,4 +367,28 @@ func hotp(key []byte, counter uint64, digits int) int {
 
 func totp(key []byte, t time.Time, digits int) int {
 	return hotp(key, uint64(t.UnixNano())/30e9, digits)
+}
+
+
+/**
+ * load the Key with aes-256-cbc decrypt
+ */
+func loadKey(key_filename string) string {
+	cmd := exec.Command("openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-d", "-in", key_filename)
+	
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("unable to load ",key_filename) 
+		return ""
+	}
+	return out.String()
+}
+
+//get current second to inform the user the life of the 2fa token
+func timePrint() {
+	dt := time.Now()
+	fmt.Println("Current Second: ", dt.Second())
+	fmt.Println("Key usable within the next: ", 60-dt.Second(), "s")
 }
