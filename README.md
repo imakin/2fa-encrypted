@@ -1,6 +1,6 @@
 2fa based on https://github.com/rsc/2fa, but with encryption using aes-cbc and pbkdf2. There is also key timeout info.
 
-compile with `go build && go install` additional requirement: openssl
+compile with `go build` or `go install` additional requirement: openssl
 
 
 ![2fa-ok](https://user-images.githubusercontent.com/6647566/155826533-313e33b1-16a9-49c6-8e4d-9d6438dd6314.png)
